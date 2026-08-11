@@ -7,33 +7,433 @@ use winit::{
 use pixels::{Pixels, SurfaceTexture};
 
 use std::time::{Instant};
-use std::io::{stdout, Write};
+use std::io::{stdout, Write, BufRead};
 
-#[derive(Clone, Copy)]
+
+use std::ops::{
+    Add,
+    Sub,
+    Mul,
+    Div,
+};
+
+
+#[derive(Copy, Clone)]
 struct Vec3 {
     x: f32,
     y: f32,
     z: f32,
+    w: f32,
 }
+
+impl Default for Vec3 {
+    fn default() -> Self {
+        Self {
+            x: 0.0,
+            y: 0.0, 
+            z: 0.0,
+            w: 1.0,
+        }
+    }
+}
+
+impl Add for Vec3 {
+    type Output = Vec3;
+    fn add(self, rhs: Vec3) -> Vec3 {
+        Vec3 {
+            x: self.x + rhs.x,
+            y: self.y + rhs.y,
+            z: self.z + rhs.z,
+            w: self.w,
+        }
+    }
+}
+
+impl Sub for Vec3 {
+    type Output = Vec3;
+    fn sub(self, rhs: Vec3) -> Vec3 {
+        Vec3 {
+            x: self.x - rhs.x,
+            y: self.y - rhs.y,
+            z: self.z - rhs.z,
+            w: self.w,
+        }
+    }
+}
+
+impl Mul for Vec3 {
+    type Output = Vec3;
+    fn mul(self, rhs: Vec3) -> Vec3 {
+        Vec3 {
+            x: self.x * rhs.x,
+            y: self.y * rhs.y,
+            z: self.z * rhs.z,
+            w: self.w,
+        }
+    }
+}
+
+impl Mul<f32> for Vec3 {
+    type Output = Vec3;
+    fn mul(self, rhs: f32) -> Vec3 {
+        Vec3 {
+            x: self.x * rhs,
+            y: self.y * rhs,
+            z: self.z * rhs,
+            w: self.w,
+        }
+    }
+}
+
+impl Div for Vec3 {
+    type Output = Vec3;
+    fn div(self, rhs: Vec3) -> Vec3 {
+        Vec3 {
+            x: self.x / rhs.x,
+            y: self.y / rhs.y,
+            z: self.z / rhs.z,
+            w: self.w,
+        }
+    }
+}
+
+impl Div<f32> for Vec3 {
+    type Output = Vec3;
+    fn div(self, rhs: f32) -> Vec3 {
+        Vec3 {
+            x: self.x / rhs,
+            y: self.y / rhs,
+            z: self.z / rhs,
+            w: self.w,
+        }
+    }
+}
+
+impl Vec3 {
+    fn new(x: f32, y: f32, z:f32) -> Self {
+        Vec3 {x, y, z, w: 1.0}
+    }
+    fn dot(self, other: Vec3) -> f32 {
+        self.x * other.x + self.y * other.y + self.z * other.z
+    }
+    fn length(self) -> f32 {
+        (self.dot(self)).sqrt()
+    }
+    fn normalize(self) -> Vec3 {
+        let l = self.length();
+        if l == 0.0 {
+            return self
+        }
+        Vec3 {
+            x: self.x / l,
+            y: self.y / l,
+            z: self.z / l,
+            w: self.w,
+        }
+    }
+    fn cross(self, other: Vec3) -> Vec3 {
+        Vec3 {
+            x: self.y * other.z - self.z * other.y,
+            y: self.z * other.x - self.x * other.z,
+            z: self.x * other.y - self.y * other.x,
+            w: self.w,
+        }
+    }
+    fn matrix_multiply_vector(self, m: &Mat4x4) -> Vec3 {
+        Vec3 {
+            x: self.x * m.get(0, 0) + self.y * m.get(1, 0) + self.z * m.get(2, 0) + self.w * m.get(3, 0),
+            y: self.x * m.get(0, 1) + self.y * m.get(1, 1) + self.z * m.get(2, 1) + self.w * m.get(3, 1),
+            z: self.x * m.get(0, 2) + self.y * m.get(1, 2) + self.z * m.get(2, 2) + self.w * m.get(3, 2),
+            w: self.x * m.get(0, 3) + self.y * m.get(1, 3) + self.z * m.get(2, 3) + self.w * m.get(3, 3),
+        }
+    }
+    fn intersect_plane(plane_p: Vec3, plane_n: Vec3, line_start: Vec3, line_end: Vec3) -> Vec3 {
+        let plane_n: Vec3 = plane_n.normalize();
+        let plane_d: f32 = -plane_n.dot(plane_p);
+        let ad: f32 = line_start.dot(plane_n);
+        let bd: f32 = line_end.dot(plane_n);
+        let t: f32 = (-plane_d - ad) / (bd - ad);
+        let line_start_to_end = line_end - line_start;
+        let line_to_intersect = line_start_to_end * t;
+        line_start + line_to_intersect
+    }
+}
+
+fn triangle_clip_against_plane(plane_p: Vec3, mut plane_n: Vec3, in_tri: &Triangle, out_tri1: &mut Triangle, out_tri2: &mut Triangle) -> usize {
+    // Confirm plane is normalised
+    plane_n = plane_n.normalize();
+
+    // Return signed shortest distance from point to plane, plane normal must be normalised
+    let dist = |p: Vec3| -> f32 {
+        plane_n.dot(p) - plane_n.dot(plane_p)
+    };
+
+    // Create two temporary storage arrays to classify points either side of plane
+    // If distance sign is positive, piont lies on "inside" of plane
+    let mut inside_points: Vec<Vec3> = Vec::new();
+    let mut outside_points: Vec<Vec3> = Vec::new();
+
+    // Get signed distance of each point in triangle to plane
+    let d0: f32 = dist(in_tri.p[0]);
+    let d1: f32 = dist(in_tri.p[1]);
+    let d2: f32 = dist(in_tri.p[2]);
+
+    // Classify each point
+    for &p in &in_tri.p {
+        let d = dist(p);
+        if d >= 0.0 {
+            inside_points.push(p);
+        } else {
+            outside_points.push(p);
+        }
+    }
+
+    // clissify triangle points, and break the input triangleing
+    // into smaller output triangles. there are four possible outcomes
+    
+    if inside_points.len() == 0 {
+        // All points lie on outside so can clip whole triangle
+        return 0;
+    }
+    if inside_points.len() == 3 {
+        // All points lie on the inside of plane, so do nothing
+        *out_tri1 = in_tri.clone();
+        return 1;
+    }
+    if inside_points.len() == 1 && outside_points.len() == 2 {
+        // Triangle should be clipped. as two points ie outside
+        // the plane, the triangle simple becoms a smaller triangle
+        
+        // Copy apperance info to new triangle
+        out_tri1.c = RED; // in_tri.c;
+        out_tri1.avg_z = in_tri.avg_z;
+
+        // The inside point is valid, so keep that...
+        out_tri1.p[0] = inside_points[0];
+
+        // but the two new points are at the locations where the 
+        // original sides of the triangle(lines) intersect with the plane
+        out_tri1.p[1] = Vec3::intersect_plane(plane_p, plane_n, inside_points[0], outside_points[0]);
+        out_tri1.p[2] = Vec3::intersect_plane(plane_p, plane_n, inside_points[0], outside_points[1]);
+
+        return 1; // return newly formed single tringle
+    }
+    if inside_points.len() == 2 && outside_points.len() == 1 {
+        // Triangle should be clippled. two points lie inside the plane,
+        // the clipped triangle becomes a quad. fortunetly, we can 
+        // represetn a quad with two new triangles
+
+        // Copy appearance info to new triangles
+        out_tri1.c = BLUE; // in_tri.c;
+        out_tri1.avg_z = in_tri.avg_z;
+
+        out_tri2.c = GREEN; //in_tri.c;
+        out_tri2.avg_z = in_tri.avg_z;
+
+        //the first tri consists of the two inside points and a new
+        //point determined by the locatio nwhere one side of the triangle
+        //intersects with the plane
+        out_tri1.p[0] = inside_points[0];
+        out_tri1.p[1] = inside_points[1];
+        out_tri1.p[2] = Vec3::intersect_plane(plane_p, plane_n, inside_points[0], outside_points[0]);
+
+        // the second triangle is composed of one of the inside points, a
+        // new point determined by the intersectio of the other side of the 
+        // triangle and the plane, and the newl created point avove
+        out_tri2.p[0] = inside_points[1];
+        out_tri2.p[1] = out_tri1.p[2];
+        out_tri2.p[2] = Vec3::intersect_plane(plane_p, plane_n, inside_points[1], outside_points[0]);
+
+        return 2; // return two newly formed triangles which form a quad
+    }
+    return 0;
+}
+
+struct Mat4x4 {
+    m: [f32; 16],
+}
+
+
+
+impl Mat4x4 {
+    fn new() -> Self {
+        Self { m: [0.0; 16] }
+    }
+    fn get(&self, row: usize, col: usize) -> f32 {
+        self.m[row * 4 + col]
+    }
+    fn set(&mut self, row: usize, col: usize, value: f32) {
+        self.m[row * 4 + col] = value;
+    }
+}
+
+fn multiply_matrix(a: &Mat4x4, b: &Mat4x4) -> Mat4x4 {
+    let mut result = Mat4x4::new();
+
+    for row in 0..4 {
+        for col in 0..4 {
+            let mut sum = 0.0;
+            for i in 0..4 {
+                sum += a.get(row, i) * b.get(i, col);
+            }
+            result.set(row, col, sum);
+        }
+    }
+
+    result
+}
+
+fn matrix_point_at(pos: Vec3, target: Vec3, up: Vec3) -> Mat4x4 {
+   // Calculate new forward direction
+   let mut new_forward = target - pos;
+   new_forward = new_forward.normalize();
+
+   // Calculate new up direction
+   let a = new_forward * up.dot(new_forward);
+   let mut new_up = up - a;
+   new_up = new_up.normalize();
+
+   // New right direction is just the cross product
+   let new_right = new_up.cross(new_forward);
+
+   // Construct dimensioning and translation matrix
+   let mut matrix = Mat4x4::new();
+   matrix.set(0, 0, new_right.x);
+   matrix.set(0, 1, new_right.y);
+   matrix.set(0, 2, new_right.z);
+   matrix.set(0, 3, 0.0);
+
+   matrix.set(1, 0, new_up.x);
+   matrix.set(1, 1, new_up.y);
+   matrix.set(1, 2, new_up.z);
+   matrix.set(1, 3, 0.0);
+
+   matrix.set(2, 0, new_forward.x);
+   matrix.set(2, 1, new_forward.y);
+   matrix.set(2, 2, new_forward.z);
+   matrix.set(2, 3, 0.0);
+
+   matrix.set(3, 0, pos.x);
+   matrix.set(3, 1, pos.y);
+   matrix.set(3, 2, pos.z);
+   matrix.set(3, 3, 1.0);
+
+   matrix
+}
+
+fn identity() -> Mat4x4 {
+    let mut mat = Mat4x4::new();
+    mat.set(0, 0, 1.0);
+    mat.set(1, 1, 1.0);
+    mat.set(2, 2, 1.0);
+    mat.set(3, 3, 1.0);
+    mat
+}
+fn rotation_x(angle_radian: f32) -> Mat4x4 {
+    let mut mat = Mat4x4::new();
+    mat.set(0, 0, 1.0);
+    mat.set(1, 1, angle_radian.cos());
+    mat.set(1, 2, angle_radian.sin());
+    mat.set(2, 1, -angle_radian.sin());
+    mat.set(2, 2, angle_radian.cos());
+    mat.set(3, 3, 1.0);
+    mat
+}
+fn rotation_y(angle_radian: f32) -> Mat4x4 {
+    let mut mat = Mat4x4::new();
+    mat.set(0, 0, angle_radian.cos());
+    mat.set(0, 2, angle_radian.sin());
+    mat.set(2, 0, -angle_radian.sin());
+    mat.set(1, 1, 1.0);
+    mat.set(2, 2, angle_radian.cos());
+    mat.set(3, 3, 1.0);
+    mat
+}
+fn rotation_z(angle_radian: f32) -> Mat4x4 {
+    let mut mat = Mat4x4::new();
+    mat.set(0, 0, angle_radian.cos());
+    mat.set(0, 1, angle_radian.sin());
+    mat.set(1, 0, -angle_radian.sin());
+    mat.set(1, 1, angle_radian.cos());
+    mat.set(2, 2, 1.0);
+    mat.set(3, 3, 1.0);
+    mat
+}
+fn translation(x: f32, y: f32, z: f32) -> Mat4x4 {
+    let mut mat = Mat4x4::new();
+    mat.set(0, 0, 1.0);
+    mat.set(1, 1, 1.0);
+    mat.set(2, 2, 1.0);
+    mat.set(3, 0, x);
+    mat.set(3, 1, y);
+    mat.set(3, 2, z);
+    mat.set(3, 3, 1.0);
+    mat
+}
+fn make_projection(fov_deg: f32, aspect_ratio: f32, near: f32, far: f32) -> Mat4x4 {
+    let fov_rad = 1.0 / (fov_deg * 0.5 / 180.0 * 3.14159).tan();
+    let mut mat = Mat4x4::new();
+    mat.set(0, 0, aspect_ratio * fov_rad);
+    mat.set(1, 1, fov_rad);
+    mat.set(2, 2, far / (far - near));
+    mat.set(3, 2, (-far * near) / (far - near));
+    mat.set(2, 3, 1.0);
+    mat.set(3, 3, 0.0);
+    mat
+}
+fn matrix_quick_inverse(m: Mat4x4) -> Mat4x4 {
+    let mut mat = Mat4x4::new();
+    mat.set(0, 0, m.get(0, 0));
+    mat.set(0, 1, m.get(1, 0));
+    mat.set(0, 2, m.get(2, 0));
+    mat.set(0, 3, 0.0);
+    mat.set(1, 0, m.get(0, 1));
+    mat.set(1, 1, m.get(1, 1));
+    mat.set(1, 2, m.get(2, 1));
+    mat.set(1, 3, 0.0);
+    mat.set(2, 0, m.get(0, 2));
+    mat.set(2, 1, m.get(1, 2));
+    mat.set(2, 2, m.get(2, 2));
+    mat.set(2, 3, 0.0);
+    mat.set(3, 0, -(m.get(3, 0) * mat.get(0, 0) + m.get(3, 1) * mat.get(1, 0) + m.get(3, 2) * mat.get(2, 0)));
+    mat.set(3, 1, -(m.get(3, 0) * mat.get(0, 1) + m.get(3, 1) * mat.get(1, 1) + m.get(3, 2) * mat.get(2, 1)));
+    mat.set(3, 2, -(m.get(3, 0) * mat.get(0, 2) + m.get(3, 1) * mat.get(1, 2) + m.get(3, 2) * mat.get(2, 2)));
+    mat.set(3, 3, 1.0);
+    mat
+}
+
+
+
+
+
 
 #[derive(Clone)]
 struct Triangle {
     p: [Vec3; 3],
+    c: (u8, u8, u8),
+    avg_z: f32,
 }
+
+impl Default for Triangle {
+    fn default() -> Self {
+        Triangle {
+            p: [
+                Vec3 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 },
+                Vec3 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 },
+                Vec3 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 },
+            ],
+            c: WHITE,
+            avg_z: 0.0,
+        }
+    }
+}
+
 
 struct Mesh {
     tris: Vec<Triangle>,
 }
 
-struct Mat4x4 {
-    m: [[f32; 4]; 4],
-}
 
-impl Mat4x4 {
-    fn new() -> Self {
-        Self { m: [[0.0; 4]; 4] }
-    }
-}
 
 const NEAR: f32 = 0.1;
 const FAR: f32 = 1000.0;
@@ -83,21 +483,48 @@ fn reset_screen(frame: &mut [u8]) {
 
 // set_pixel(frame, x, y, width, r, g, b);
 
-fn multiply_matrix_vector(i: &Vec3, m: &Mat4x4) -> Vec3 {
-    let mut o = Vec3 { x: 0.0, y: 0.0, z: 0.0 };
 
-    o.x = i.x * m.m[0][0] + i.y * m.m[1][0] + i.z * m.m[2][0] + m.m[3][0];
-    o.y = i.x * m.m[0][1] + i.y * m.m[1][1] + i.z * m.m[2][1] + m.m[3][1];
-    o.z = i.x * m.m[0][2] + i.y * m.m[1][2] + i.z * m.m[2][2] + m.m[3][2];
-    let w = i.x * m.m[0][3] + i.y * m.m[1][3] + i.z * m.m[2][3] + m.m[3][3];
 
-    if w != 0.0 {
-        o.x /= w;
-        o.y /= w;
-        o.z /= w;
+// Load model test
+fn load_mesh(file_name: &str) -> Mesh {
+    let file = std::fs::File::open(file_name).expect("Failed to open file");
+    let reader = std::io::BufReader::new(file);
+
+    let mut vectors_list: Vec<Vec3> = Vec::new();
+    let mut triangles_list: Vec<Triangle> = Vec::new();
+
+    for line in reader.lines() {
+        let line = line.expect("Failed to read line");
+        let parts: Vec<&str> = line.split_whitespace().collect();
+        if parts.is_empty() { continue; }
+
+        match parts[0] {
+            "v" => {
+                let x: f32 = parts[1].parse().unwrap();
+                let y: f32 = parts[2].parse().unwrap();
+                let z: f32 = parts[3].parse().unwrap();
+                vectors_list.push(Vec3 { x, y, z, w: 1.0 });
+            }
+            "f" => {
+                let i1: usize = parts[1].split('/').next().unwrap().parse::<usize>().unwrap() - 1;
+                let i2: usize = parts[2].split('/').next().unwrap().parse::<usize>().unwrap() - 1;
+                let i3: usize = parts[3].split('/').next().unwrap().parse::<usize>().unwrap() - 1;
+
+                triangles_list.push(Triangle {
+                    p: [
+                        vectors_list[i1],
+                        vectors_list[i2],
+                        vectors_list[i3],
+                    ],
+                    c: WHITE,
+                    avg_z: 0.0,
+                });
+            }
+            _ => {}
+        }
     }
 
-    o
+    Mesh { tris: triangles_list }
 }
 
 fn draw(frame: &mut [u8], x: usize, y: usize, color: (u8, u8, u8), width: usize, height: usize) {
@@ -109,8 +536,8 @@ fn draw(frame: &mut [u8], x: usize, y: usize, color: (u8, u8, u8), width: usize,
 fn draw_line(frame: &mut [u8], x1: i32, y1: i32, x2: i32, y2: i32, color: (u8, u8, u8), width: i32, height: i32) {
     let mut x;
     let mut y;
-    let mut xe;
-    let mut ye;
+    let xe;
+    let ye;
     let dx = x2 - x1;
     let dy = y2 - y1;
     let dx1_abs = dx.abs();
@@ -147,7 +574,7 @@ fn draw_line(frame: &mut [u8], x1: i32, y1: i32, x2: i32, y2: i32, color: (u8, u
         if dy >= 0 {
             x = x1;
             y = y1;
-            ye = y1;
+            ye = y2;
         } else {
             x = x2;
             y = y2;
@@ -178,6 +605,307 @@ fn draw_triangle(frame: &mut [u8], x1: i32, y1: i32, x2: i32, y2: i32, x3: i32, 
     draw_line(frame, x3, y3, x1, y1, color, width, height);
 }
 
+fn fill_line(frame: &mut [u8], sx: i32, ex: i32, ny: i32, color: (u8, u8, u8), width: i32, height: i32) {
+    for i in sx..ex+1 {
+        draw(frame, i as usize, ny as usize, color, width as usize, height as usize);
+    }
+}
+
+fn fill_triangle(frame: &mut [u8], mut x1: i32, mut y1: i32, mut x2: i32, mut y2: i32, mut x3: i32, mut y3: i32, color: (u8, u8, u8), width: i32, height: i32) {
+    let mut changed1 = false;
+    let mut changed2 = false;
+
+    // Sort vertices
+    if y1 > y2 {
+        (y1, y2) = (y2, y1);
+        (x1, x2) = (x2, x1);
+    }
+    if  y1 > y3 {
+        (y1, y3) = (y3, y1);
+        (x1, x3) = (x3, x1);
+    }
+    if y2 > y3 {
+        (y2, y3) = (y3, y2);
+        (x2, x3) = (x3, x2);
+    }    
+
+    let mut t1x = x1;
+    let mut t2x = x1;
+    let mut y = y1;  // Starting points
+    let mut signx1;
+    let mut signx2;
+
+    let mut dx1 = x2 - x1;
+    if dx1 < 0 {
+        dx1 = -dx1;
+        signx1 = -1;
+    } else {
+        signx1 = 1;
+    }
+    let mut dy1 = y2 - y1;
+
+    let mut dx2 = x3 - x1;
+    if dx2 < 0 {
+        dx2 = -dx2;
+        signx2 = -1;
+    } else {
+        signx2 = 1;
+    }
+    let mut dy2 = y3 - y1;
+
+    // Swap values
+    if dy1 > dx1 { 
+        (dx1, dy1) = (dy1, dx1);
+        changed1 = true;
+    }
+
+    // Swap values
+    if dy2 > dx2 {
+        (dy2, dx2) = (dx2, dy2);
+        changed2 = true;
+    }
+
+    let mut e2 = dx2 >> 1;
+
+    // Flat top, just process the second half
+    if y1 != y2 {
+
+        let mut e1 = dx1 >> 1;
+
+        
+        for mut i in 0..dx1 {
+
+            let mut next1 = false;
+            let mut next2 = false;
+            let mut t1xp = 0;
+            let mut t2xp = 0;
+            let mut minx;
+            let mut maxx;
+
+            if t1x < t2x {
+                minx = t1x;
+                maxx = t2x;
+            } else {
+                minx = t2x;
+                maxx = t1x;
+            }
+
+            // Process first line until y value is about to change
+            while i < dx1 {
+                i += 1;
+                e1 += dy1;
+                while e1 >= dx1 {
+                    e1 -= dx1;
+                    if changed1 {
+                        t1xp = signx1;
+                    } else {
+                        next1 = true;
+                        break;
+                    }
+                }
+
+                if next1 {
+                    break;
+                }
+
+                if changed1 {
+                    break;
+                } else {
+                    t1x += signx1;
+                }
+
+            }
+
+            // Next1
+            // Process second line until y value is about to change
+            loop {
+                e2 += dy2;
+                while e2 >= dx2 {
+                    e2 -= dx2;
+                    if changed2 {
+                        t2xp = signx2;
+                    } else {
+                        next2 = true;
+                        break;
+                    }
+                }
+
+                if next2 {
+                    break;
+                }
+                if changed2 {
+                    break;
+                }
+                else {
+                    t2x += signx2;
+                }
+
+            }
+
+            // Next2
+            if minx > t1x {
+                minx = t1x;
+            }
+            if minx > t2x {
+                minx = t2x;
+            }
+            if maxx < t1x {
+                maxx = t1x;
+            }
+            if maxx < t2x {
+                maxx = t2x;
+            }
+
+            // Draw line from min to max points found on the y
+            fill_line(frame, minx, maxx, y, color, width, height);
+
+            // Now increase y
+            if !changed1 {
+                t1x += signx1;
+            }
+            t1x += t1xp;
+            if !changed2 {
+                t2x += signx2;
+            }
+            t2x += t2xp;
+            y += 1;
+            if y == y2 {
+                break;
+            }
+
+        }
+    }
+
+    // Next
+    // Second half
+    dx1 = x3 - x2;
+    if dx1 < 0 {
+        dx1 = -dx1;
+        signx1 = -1;
+    } else {
+        signx1 = 1;
+    }
+    dy1 = y3 - y2;
+    t1x = x2;
+
+    // Swap values
+    if dy1 > dx1 {
+        (dy1, dx1) = (dx1, dy1);
+        changed1 = true;
+
+    } else {
+        changed1 = false;
+    }
+
+    let mut e1 = dx1 >> 1;
+
+    for mut  i in 0..dx1+1 {
+
+        let mut next3 = false;
+        let mut next4 = false;
+        let mut t1xp = 0;
+        let mut t2xp = 0;
+        let mut minx;
+        let mut maxx;
+
+        if t1x < t2x {
+            minx = t1x;
+            maxx = t2x;
+        } else {
+            minx = t2x;
+            maxx = t1x;
+        }
+
+        // Process first line until y value is about to change
+        while i < dx1 {
+            e1 += dy1;
+            while e1 >= dx1 {
+                e1 -= dx1;
+                if changed1 {
+                    t1xp = signx1; // t1x += signx1;
+                    break;
+                } else {
+                    next3 = true;
+                    break;
+                }
+            }
+
+            if next3 {
+                break;
+            }
+
+            if changed1 {
+                break;
+            }
+            else {
+                t1x += signx1;
+            }
+            if i < dx1 {
+                i += 1;
+            }
+
+        }
+
+        // Next3
+        // Process second line until y value is about to change
+        while t2x != x3 {
+            e2 += dy2;
+            while e2 >= dx2 {
+                e2 -= dx2;
+                if changed2 {
+                    t2xp = signx2;
+                } else {
+                    next4 = true;
+                    break;
+                }
+            }
+
+            if next4 {
+                break;
+            }
+
+            if changed2 {
+                break;
+            } else {
+                t2x += signx2;
+            }
+        }
+
+        // Next4
+        // if minx > t1x:    # Visual Glitch with t1x
+        //     minx = t1x
+        if minx > t2x {
+            minx = t2x;
+        }
+        // if maxx < t1x:    # Visual Glitch with t1x
+        //     maxx = t1x
+        if maxx < t2x {
+            maxx = t2x;
+        }
+
+        fill_line(frame, minx, maxx, y, color, width, height);
+        if !changed1 {
+            t1x += signx1;
+        }
+        t1x += t1xp;
+        if !changed2 {
+            t2x += signx2;
+        }
+        t2x += t2xp;
+        y += 1;
+        if y > y3 {
+            return
+        }
+    }
+}
+
+fn get_color() {
+
+}
+
+const PELTA: f32 = 0.05;
+
+
 fn main() {
     let width: u32 = 800;
     let height: u32 = 600;
@@ -192,151 +920,74 @@ fn main() {
 
     let mut tp1: Instant = Instant::now();
 
-    let mut mesh_cube = Mesh {
-        tris: vec![
-            // South
-            Triangle { 
-                p: [
-                    Vec3 { x: 0.0, y: 0.0, z: 0.0 },
-                    Vec3 { x: 0.0, y: 1.0, z: 0.0 },
-                    Vec3 { x: 1.0, y: 1.0, z: 0.0 },
-                ] 
-            },
-            Triangle { 
-                p: [
-                    Vec3 { x: 0.0, y: 0.0, z: 0.0 },
-                    Vec3 { x: 1.0, y: 1.0, z: 0.0 },
-                    Vec3 { x: 1.0, y: 0.0, z: 0.0 },
-                ] 
-            },
-
-            // East
-            Triangle { 
-                p: [
-                    Vec3 { x: 1.0, y: 0.0, z: 0.0 },
-                    Vec3 { x: 1.0, y: 1.0, z: 0.0 },
-                    Vec3 { x: 1.0, y: 1.0, z: 1.0 },
-                ] 
-            },
-            Triangle { 
-                p: [
-                    Vec3 { x: 1.0, y: 0.0, z: 0.0 },
-                    Vec3 { x: 1.0, y: 1.0, z: 1.0 },
-                    Vec3 { x: 1.0, y: 0.0, z: 1.0 },
-                ] 
-            },
-
-            // North
-            Triangle { 
-                p: [
-                    Vec3 { x: 1.0, y: 0.0, z: 1.0 },
-                    Vec3 { x: 1.0, y: 1.0, z: 1.0 },
-                    Vec3 { x: 0.0, y: 1.0, z: 1.0 },
-                ] 
-            },
-            Triangle { 
-                p: [
-                    Vec3 { x: 1.0, y: 0.0, z: 1.0 },
-                    Vec3 { x: 0.0, y: 1.0, z: 1.0 },
-                    Vec3 { x: 0.0, y: 0.0, z: 1.0 },
-                ] 
-            },
-
-            // West
-            Triangle { 
-                p: [
-                    Vec3 { x: 0.0, y: 0.0, z: 1.0 },
-                    Vec3 { x: 0.0, y: 1.0, z: 1.0 },
-                    Vec3 { x: 0.0, y: 1.0, z: 0.0 },
-                ] 
-            },
-            Triangle { 
-                p: [
-                    Vec3 { x: 0.0, y: 0.0, z: 1.0 },
-                    Vec3 { x: 0.0, y: 1.0, z: 0.0 },
-                    Vec3 { x: 0.0, y: 0.0, z: 0.0 },
-                ] 
-            },
-
-            // Top
-            Triangle { 
-                p: [
-                    Vec3 { x: 0.0, y: 1.0, z: 0.0 },
-                    Vec3 { x: 0.0, y: 1.0, z: 1.0 },
-                    Vec3 { x: 1.0, y: 1.0, z: 1.0 },
-                ] 
-            },
-            Triangle { 
-                p: [
-                    Vec3 { x: 0.0, y: 1.0, z: 0.0 },
-                    Vec3 { x: 1.0, y: 1.0, z: 1.0 },
-                    Vec3 { x: 1.0, y: 1.0, z: 0.0 },
-                ] 
-            },
-
-            // Bottom
-            Triangle { 
-                p: [
-                    Vec3 { x: 1.0, y: 0.0, z: 1.0 },
-                    Vec3 { x: 0.0, y: 0.0, z: 1.0 },
-                    Vec3 { x: 0.0, y: 0.0, z: 0.0 },
-                ] 
-            },
-            Triangle { 
-                p: [
-                    Vec3 { x: 1.0, y: 0.0, z: 1.0 },
-                    Vec3 { x: 0.0, y: 0.0, z: 0.0 },
-                    Vec3 { x: 1.0, y: 0.0, z: 0.0 },
-                ] 
-            },
-        ],
-    };
+    let mesh = load_mesh("retro_fp_pistol.obj");
 
 
 
     // Projection Matrix
-    let mut mat_proj = Mat4x4::new();
-    mat_proj.m[0][0] = aspect_ratio * fov_rad;
-    mat_proj.m[1][1] = fov_rad;
-    mat_proj.m[2][2] = FAR / (FAR - NEAR);
-    mat_proj.m[3][2] = (-FAR * NEAR) / (FAR - NEAR);
-    mat_proj.m[2][3] = 1.0;
-    mat_proj.m[3][3] = 0.0;
+    let mat_proj = make_projection(90.0, height as f32 / width as f32, 0.1, 1000.0); 
 
 
     let mut theta: f32 = 0.0;
 
-    let mut mat_rot_z = Mat4x4::new();
-    let mut mat_rot_x = Mat4x4::new();
+
+
+    let mut v_camera = Vec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 0.0,
+        w: 1.0,
+    };
+
+    let mut v_look_dir = Vec3 {
+        x: 0.0,
+        y: 0.0,
+        z: 1.0,
+        w: 0.0,
+    };
+
+    let v_forward: Vec3 = v_look_dir * (8.0 * PELTA);
+
+    use std::time::{Instant, Duration};
+
+    let mut last_time = Instant::now();
+    let mut frame_count = 0;
+    let mut yaw = 0.0;
 
     
-
+    // Create window and buffer
     let event_loop = EventLoop::new();
-
     let window = WindowBuilder::new()
         .with_title("3D Demo")
         .with_inner_size(winit::dpi::LogicalSize::new(width, height))
         .build(&event_loop)
         .unwrap();
-
     let surface_texture = SurfaceTexture::new(width, height, &window);
     let mut pixels = Pixels::new(width, height, surface_texture).unwrap();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
 
-        let tp2: Instant = Instant::now();
-        let elapsed_time: f64 = tp2.duration_since(tp1).as_secs_f64();
-        tp1 = tp2;
+        frame_count += 1;
+
+        let elapsed = last_time.elapsed();
+        if elapsed >= Duration::from_secs(1) {
+            let fps = frame_count as f64 / elapsed.as_secs_f64();
+            println!("FPS: {:.1}", fps);
+
+            frame_count = 0;
+            last_time = Instant::now();
+        }
 
 
-
-        // Print stats
-        print!("\rA={:.2} X={:.2} Y={:.2} FPS={:.2}     ", player_a, player_x, player_y, 1.0 / elapsed_time);
-        stdout().flush().unwrap();
-
+        // Handle input and player movement
         match event {
+
+
             Event::WindowEvent { event, .. } => match event {
+
+
+
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
 
                 WindowEvent::KeyboardInput { input, .. } => {
@@ -346,22 +997,19 @@ fn main() {
                                 *control_flow = ControlFlow::Exit;
                             }
                             (VirtualKeyCode::A, ElementState::Pressed) => {
-                                player_a -= SPEED * 0.75 * DELTA;
+                                yaw += 2.0 * PELTA;
                             }
                             (VirtualKeyCode::D, ElementState::Pressed) => {
-                                player_a += SPEED * 0.75 * DELTA;
+                                yaw -= 2.0 * PELTA;
                             }
 
                             (VirtualKeyCode::W, ElementState::Pressed) => {
-                                player_x += player_a.sin() * SPEED * DELTA;
-                                player_y += player_a.cos() * SPEED * DELTA;
+                                v_camera = v_camera + v_forward;
 
                             }
 
                             (VirtualKeyCode::S, ElementState::Pressed) => {
-                                player_x -= player_a.sin() * SPEED * DELTA;
-                                player_y -= player_a.cos() * SPEED * DELTA;
-    
+                                v_camera = v_camera - v_forward
                             }
 
                             (VirtualKeyCode::Q, ElementState::Pressed) => {
@@ -369,11 +1017,27 @@ fn main() {
                                 player_y -= (player_a + 1.5).cos() * SPEED * DELTA;
 
                             }
-                            
+
                             (VirtualKeyCode::E, ElementState::Pressed) => {
                                 player_x -= (player_a - 1.5).sin() * SPEED * DELTA;
                                 player_y -= (player_a - 1.5).cos() * SPEED * DELTA;
   
+                            }
+
+                            (VirtualKeyCode::Up, ElementState::Pressed) => {
+                                v_camera.y -= 8.0 * PELTA;
+                            }
+
+                            (VirtualKeyCode::Down, ElementState::Pressed) => {
+                                v_camera.y += 8.0 * PELTA; 
+                            }
+
+                            (VirtualKeyCode::Left, ElementState::Pressed) => {
+                                v_camera.x -= 8.0 * PELTA;
+                            }
+
+                            (VirtualKeyCode::Right, ElementState::Pressed) => {
+                                v_camera.x += 8.0 * PELTA;
                             }
 
                             _ => {}
@@ -386,96 +1050,259 @@ fn main() {
 
 
             Event::RedrawRequested(_) => {
+                // Define screen
                 let frame: &mut [u8] = pixels.frame_mut();
 
+                // Clear screen
                 reset_screen(frame);
 
+                // theta += 0.01;
+
+                let mat_rot_z = rotation_z(theta * 0.5);
+                let mat_rot_x = rotation_x(theta);
+
+                let mat_trans = translation(0.0, 0.0, 16.0);
+
+                let mut mat_world = identity();
+                mat_world = multiply_matrix(&mat_world, &mat_rot_x);
+                mat_world = multiply_matrix(&mat_world, &mat_rot_z);
+                mat_world = multiply_matrix(&mat_world, &mat_trans);
+
+                let v_up = Vec3 {
+                    x: 0.0,
+                    y: 1.0,
+                    z: 0.0,
+                    w: 0.0,
+                };
+
+                let mut v_target = Vec3 {
+                    x: 0.0,
+                    y: 0.0,
+                    z: 1.0,
+                    w: 0.0,
+                };
+                let mat_camera_rot: Mat4x4 = rotation_y(yaw);
+                v_look_dir = v_target.matrix_multiply_vector(&mat_camera_rot);
+                v_target = v_camera + v_look_dir;
+
+                let mat_camera: Mat4x4 = matrix_point_at(v_camera, v_target, v_up);
+
+                // Make view matrix from camera
+                let mat_view: Mat4x4 = matrix_quick_inverse(mat_camera);
 
 
 
-                
-
-                theta += DELTA as f32;
-
+                // Store triangles for rastering later
+                let mut vec_triangles_to_raster: Vec<Triangle> = Vec::new();
 
 
-                    // Rotation Z
-                mat_rot_z.m[0][0] = theta.cos();
-                mat_rot_z.m[0][1] = theta.sin();
-                mat_rot_z.m[1][0] = -theta.sin();
-                mat_rot_z.m[1][1] = theta.cos();
-                mat_rot_z.m[2][2] = 1.0;
-                mat_rot_z.m[3][3] = 1.0;
+                // Draw triangles
+                for tri in &mesh.tris {
 
-                //Rotation X
-                mat_rot_x.m[0][0] = 1.0;
-                mat_rot_x.m[1][1] = (theta * 0.5).cos();
-                mat_rot_x.m[1][2] = (theta * 0.5).sin();
-                mat_rot_x.m[2][1] = -(theta * 0.5).sin();
-                mat_rot_x.m[2][2] = (theta * 0.5).cos();
-                mat_rot_x.m[3][3] = 1.0;
-
-
-
-                
-
-                // left here (draw triangles)
-                for tri in &mesh_cube.tris {
-
-                    let mut tri_rotated_z = Triangle {
+                    let tri_transformed = Triangle {
                         p: [
-                            multiply_matrix_vector(&tri.p[0], &mat_rot_z),
-                            multiply_matrix_vector(&tri.p[1], &mat_rot_z),
-                            multiply_matrix_vector(&tri.p[2], &mat_rot_z),
+                            tri.p[0].matrix_multiply_vector(&mat_world),
+                            tri.p[1].matrix_multiply_vector(&mat_world),
+                            tri.p[2].matrix_multiply_vector(&mat_world),
                         ],
+                        c: WHITE,
+                        avg_z: 0.0,
                     };
 
-                    let mut tri_rotated_zx = Triangle {
-                        p: [
-                            multiply_matrix_vector(&tri_rotated_z.p[0], &mat_rot_x),
-                            multiply_matrix_vector(&tri_rotated_z.p[1], &mat_rot_x),
-                            multiply_matrix_vector(&tri_rotated_z.p[2], &mat_rot_x),
-                        ],
-                    };
-                    
-                    let mut tri_translated = tri_rotated_zx.clone();
-                    tri_translated.p[0].z = tri_rotated_zx.p[0].z + 3.0;
-                    tri_translated.p[1].z = tri_rotated_zx.p[1].z + 3.0;
-                    tri_translated.p[2].z = tri_rotated_zx.p[2].z + 3.0;
+                    let line1 = tri_transformed.p[1] - tri_transformed.p[0];
+                    let line2 = tri_transformed.p[2] - tri_transformed.p[0];
 
-                    let mut tri_projected = Triangle {
-                        p: [
-                            multiply_matrix_vector(&tri_translated.p[0], &mat_proj),
-                            multiply_matrix_vector(&tri_translated.p[1], &mat_proj),
-                            multiply_matrix_vector(&tri_translated.p[2], &mat_proj),
-                        ],
-                    };
+                    let mut normal = line1.cross(line2);
 
-                    // Scale into view
-                    tri_projected.p[0].x += 1.0;
-                    tri_projected.p[1].x += 1.0;
-                    tri_projected.p[2].x += 1.0;
-    
-                    tri_projected.p[0].y += 1.0;
-                    tri_projected.p[1].y += 1.0;
-                    tri_projected.p[2].y += 1.0;
+                    normal = normal.normalize();
 
-                    tri_projected.p[0].x *= 0.5 * width as f32;
-                    tri_projected.p[1].x *= 0.5 * width as f32;
-                    tri_projected.p[2].x *= 0.5 * width as f32;
-
-                    tri_projected.p[0].y *= 0.5 * height as f32;
-                    tri_projected.p[1].y *= 0.5 * height as f32;
-                    tri_projected.p[2].y *= 0.5 * height as f32;
-
-                    
+                    let camera_ray = tri_transformed.p[0] - v_camera;
 
 
-                    draw_triangle(frame, tri_projected.p[0].x as i32, tri_projected.p[0].y as i32, tri_projected.p[1].x as i32, tri_projected.p[1].y as i32, tri_projected.p[2].x as i32, tri_projected.p[2].y as i32, WHITE, width as i32, height as i32);
+                    if (normal.dot(camera_ray)) < 0.0 {
+
+                        let mut light_direction = Vec3 {
+                            x: 0.0,
+                            y: 1.0,
+                            z: -1.0,
+                            w: 1.0,
+                        };
+                        light_direction = light_direction.normalize();
+
+                        let dp = light_direction.dot(normal).max(0.1);
+
+
+                        // Get a shade of grey
+                        let intensity = ((dp + 1.0) * 0.5).clamp(0.0, 1.0);
+                        let grey = (intensity * 255.0) as u8;
+                        let color = (grey, grey, grey);
+                        
+                        // Convert world space --> view space
+                        let tri_viewed: Triangle = Triangle {
+                            p: [
+                                tri_transformed.p[0].matrix_multiply_vector(&mat_view),
+                                tri_transformed.p[1].matrix_multiply_vector(&mat_view),
+                                tri_transformed.p[2].matrix_multiply_vector(&mat_view),
+                            ],
+                            c: color,
+                            avg_z: 0.0,
+                        };
+
+                        // Clip viewed triangle against near plane, this could form two additional triangles
+                        let mut clipped = [
+                            Triangle::default(),
+                            Triangle::default(),
+                        ];
+
+                        let (first, rest) = clipped.split_at_mut(1);
+
+                        let n_clipped_triangles = triangle_clip_against_plane(
+                            Vec3 { x: 0.0, y: 0.0, z: 0.1, w: 1.0 },
+                            Vec3 { x: 0.0, y: 0.0, z: 1.0, w: 1.0 },
+                            &tri_viewed,
+                            &mut first[0],
+                            &mut rest[0],
+                        );
+
+                        for n in 0..n_clipped_triangles {
+
+
+                            // Project triangles from 3D --> 2D
+                            let mut tri_projected = Triangle {
+                                p: [
+                                    clipped[n].p[0].matrix_multiply_vector(&mat_proj),
+                                    clipped[n].p[1].matrix_multiply_vector(&mat_proj),
+                                    clipped[n].p[2].matrix_multiply_vector(&mat_proj),
+                                ],
+                                c: clipped[n].c,
+                                avg_z: clipped[n].avg_z,
+                            };
+
+                            // normalize manually
+                            tri_projected.p[0] = tri_projected.p[0] / tri_projected.p[0].w;
+                            tri_projected.p[1] = tri_projected.p[1] / tri_projected.p[1].w;
+                            tri_projected.p[2] = tri_projected.p[2] / tri_projected.p[2].w;
+                        
+
+
+
+                            // Scale triangle into view
+                            let offset_view = Vec3 {
+                                x: 1.0,
+                                y: 1.0,
+                                z: 0.0,
+                                w: 1.0,
+                            };
+
+                            tri_projected.p[0] = tri_projected.p[0] + offset_view;
+                            tri_projected.p[1] = tri_projected.p[1] + offset_view;
+                            tri_projected.p[2] = tri_projected.p[2] + offset_view;
+
+                            tri_projected.p[0].x *= 0.5 * width as f32;
+                            tri_projected.p[1].x *= 0.5 * width as f32;
+                            tri_projected.p[2].x *= 0.5 * width as f32;
+
+                            tri_projected.p[0].y *= 0.5 * height as f32;
+                            tri_projected.p[1].y *= 0.5 * height as f32;
+                            tri_projected.p[2].y *= 0.5 * height as f32;
+
+                            vec_triangles_to_raster.push(tri_projected);
+
+                        }
+
+                    }
+
 
                 }
-                
-                // set_pixel(frame, x, y, width, r, g, b);
+
+                // compute depth
+                vec_triangles_to_raster.iter_mut().for_each(|t| {
+                    t.avg_z = (t.p[0].z + t.p[1].z + t.p[2].z) / 3.0;
+                });
+
+                // Sort triangles from back to front (painters algorithm)
+                vec_triangles_to_raster.sort_by(|a, b| b.avg_z.total_cmp(&a.avg_z));
+
+
+                // Loop through all transformed, viewed, projected, and sorted triangles
+                // Clip and rasterize triangles
+                for tri_to_raster in &vec_triangles_to_raster {
+                    let mut clipped: [Triangle; 2] = [tri_to_raster.clone(), tri_to_raster.clone()];
+                    let (first, rest) = clipped.split_at_mut(1);
+                    let mut list_triangles: std::collections::VecDeque<Triangle> = std::collections::VecDeque::new();
+                    list_triangles.push_back(tri_to_raster.clone());
+                    let mut n_new_triangles = 1;
+
+                    for p in 0..4 {
+                        let mut n_tris_to_add = 0;
+
+                        while n_new_triangles > 0 {
+                            let test = list_triangles.pop_front().unwrap();
+                            n_new_triangles -= 1;
+
+                            n_tris_to_add = match p {
+                                0 => triangle_clip_against_plane(
+                                    Vec3::new(0.0, 0.0, 0.0),
+                                    Vec3::new(0.0, 1.0, 0.0),
+                                    &test,
+                                    &mut first[0],
+                                    &mut rest[0],
+                                ),
+                                1 => triangle_clip_against_plane(
+                                    Vec3::new(0.0, (height - 1) as f32, 0.0),
+                                    Vec3::new(0.0, -1.0, 0.0),
+                                    &test,
+                                    &mut first[0],
+                                    &mut rest[0],
+                                ),
+                                2 => triangle_clip_against_plane(
+                                    Vec3::new(0.0, 0.0, 0.0),
+                                    Vec3::new(1.0, 0.0, 0.0),
+                                    &test,
+                                    &mut first[0],
+                                    &mut rest[0],
+                                ),
+                                3 => triangle_clip_against_plane(
+                                    Vec3::new((width - 1) as f32, 0.0, 0.0),
+                                    Vec3::new(-1.0, 0.0, 0.0),
+                                    &test,
+                                    &mut first[0],
+                                    &mut rest[0],
+                                ),
+                                _ => 0,
+                            };
+
+                            for w in 0..n_tris_to_add {
+                                list_triangles.push_back(if w == 0 { first[w].clone() } else { rest[0].clone() });
+                            }
+                        }
+
+                        n_new_triangles = list_triangles.len();
+                    }
+
+                    // Fill and optionally draw triangle edges
+                    for t in &list_triangles {
+                        fill_triangle(
+                            frame,
+                            t.p[0].x as i32, t.p[0].y as i32,
+                            t.p[1].x as i32, t.p[1].y as i32,
+                            t.p[2].x as i32, t.p[2].y as i32,
+                            t.c,
+                            width as i32,
+                            height as i32,
+                        );
+
+                        draw_triangle(
+                            frame,
+                            t.p[0].x as i32, t.p[0].y as i32,
+                            t.p[1].x as i32, t.p[1].y as i32,
+                            t.p[2].x as i32, t.p[2].y as i32,
+                            WHITE,
+                            width as i32,
+                            height as i32,
+                         );
+                    }
+                }
 
                 pixels.render().unwrap();
             }
