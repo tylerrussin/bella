@@ -1,7 +1,13 @@
 use winit::{
-    event::{Event, WindowEvent, ElementState, VirtualKeyCode},
+    event::{
+        Event,
+        WindowEvent,
+        DeviceEvent,
+        ElementState,
+        VirtualKeyCode,
+    },
     event_loop::{ControlFlow, EventLoop},
-    window::WindowBuilder,
+    window::{WindowBuilder, CursorGrabMode},
 };
 
 use pixels::{Pixels, SurfaceTexture};
@@ -205,7 +211,7 @@ fn triangle_clip_against_plane(plane_p: Vec3, mut plane_n: Vec3, in_tri: &Triang
         // the plane, the triangle simple becoms a smaller triangle
         
         // Copy apperance info to new triangle
-        out_tri1.c = RED; // in_tri.c;
+        out_tri1.c = in_tri.c; //RED;
         out_tri1.avg_z = in_tri.avg_z;
 
         // The inside point is valid, so keep that...
@@ -224,10 +230,10 @@ fn triangle_clip_against_plane(plane_p: Vec3, mut plane_n: Vec3, in_tri: &Triang
         // represetn a quad with two new triangles
 
         // Copy appearance info to new triangles
-        out_tri1.c = BLUE; // in_tri.c;
+        out_tri1.c = in_tri.c; // BLUE;
         out_tri1.avg_z = in_tri.avg_z;
 
-        out_tri2.c = GREEN; //in_tri.c;
+        out_tri2.c = in_tri.c; // GREEN;
         out_tri2.avg_z = in_tri.avg_z;
 
         //the first tri consists of the two inside points and a new
@@ -611,299 +617,385 @@ fn fill_line(frame: &mut [u8], sx: i32, ex: i32, ny: i32, color: (u8, u8, u8), w
     }
 }
 
-fn fill_triangle(frame: &mut [u8], mut x1: i32, mut y1: i32, mut x2: i32, mut y2: i32, mut x3: i32, mut y3: i32, color: (u8, u8, u8), width: i32, height: i32) {
-    let mut changed1 = false;
-    let mut changed2 = false;
+// fn fill_triangle(frame: &mut [u8], mut x1: i32, mut y1: i32, mut x2: i32, mut y2: i32, mut x3: i32, mut y3: i32, color: (u8, u8, u8), width: i32, height: i32) {
+//     let mut changed1 = false;
+//     let mut changed2 = false;
 
-    // Sort vertices
-    if y1 > y2 {
-        (y1, y2) = (y2, y1);
-        (x1, x2) = (x2, x1);
-    }
-    if  y1 > y3 {
-        (y1, y3) = (y3, y1);
-        (x1, x3) = (x3, x1);
-    }
-    if y2 > y3 {
-        (y2, y3) = (y3, y2);
-        (x2, x3) = (x3, x2);
-    }    
+//     // Sort vertices
+//     if y1 > y2 {
+//         (y1, y2) = (y2, y1);
+//         (x1, x2) = (x2, x1);
+//     }
+//     if  y1 > y3 {
+//         (y1, y3) = (y3, y1);
+//         (x1, x3) = (x3, x1);
+//     }
+//     if y2 > y3 {
+//         (y2, y3) = (y3, y2);
+//         (x2, x3) = (x3, x2);
+//     }    
 
-    let mut t1x = x1;
-    let mut t2x = x1;
-    let mut y = y1;  // Starting points
-    let mut signx1;
-    let mut signx2;
+//     let mut t1x = x1;
+//     let mut t2x = x1;
+//     let mut y = y1;  // Starting points
+//     let mut signx1;
+//     let mut signx2;
 
-    let mut dx1 = x2 - x1;
-    if dx1 < 0 {
-        dx1 = -dx1;
-        signx1 = -1;
-    } else {
-        signx1 = 1;
-    }
-    let mut dy1 = y2 - y1;
+//     let mut dx1 = x2 - x1;
+//     if dx1 < 0 {
+//         dx1 = -dx1;
+//         signx1 = -1;
+//     } else {
+//         signx1 = 1;
+//     }
+//     let mut dy1 = y2 - y1;
 
-    let mut dx2 = x3 - x1;
-    if dx2 < 0 {
-        dx2 = -dx2;
-        signx2 = -1;
-    } else {
-        signx2 = 1;
-    }
-    let mut dy2 = y3 - y1;
+//     let mut dx2 = x3 - x1;
+//     if dx2 < 0 {
+//         dx2 = -dx2;
+//         signx2 = -1;
+//     } else {
+//         signx2 = 1;
+//     }
+//     let mut dy2 = y3 - y1;
 
-    // Swap values
-    if dy1 > dx1 { 
-        (dx1, dy1) = (dy1, dx1);
-        changed1 = true;
-    }
+//     // Swap values
+//     if dy1 > dx1 { 
+//         (dx1, dy1) = (dy1, dx1);
+//         changed1 = true;
+//     }
 
-    // Swap values
-    if dy2 > dx2 {
-        (dy2, dx2) = (dx2, dy2);
-        changed2 = true;
-    }
+//     // Swap values
+//     if dy2 > dx2 {
+//         (dy2, dx2) = (dx2, dy2);
+//         changed2 = true;
+//     }
 
-    let mut e2 = dx2 >> 1;
+//     let mut e2 = dx2 >> 1;
 
-    // Flat top, just process the second half
-    if y1 != y2 {
+//     // Flat top, just process the second half
+//     if y1 != y2 {
 
-        let mut e1 = dx1 >> 1;
+//         let mut e1 = dx1 >> 1;
 
         
-        for mut i in 0..dx1 {
+//         for mut i in 0..dx1 {
 
-            let mut next1 = false;
-            let mut next2 = false;
-            let mut t1xp = 0;
-            let mut t2xp = 0;
-            let mut minx;
-            let mut maxx;
+//             let mut next1 = false;
+//             let mut next2 = false;
+//             let mut t1xp = 0;
+//             let mut t2xp = 0;
+//             let mut minx;
+//             let mut maxx;
 
-            if t1x < t2x {
-                minx = t1x;
-                maxx = t2x;
-            } else {
-                minx = t2x;
-                maxx = t1x;
-            }
+//             if t1x < t2x {
+//                 minx = t1x;
+//                 maxx = t2x;
+//             } else {
+//                 minx = t2x;
+//                 maxx = t1x;
+//             }
 
-            // Process first line until y value is about to change
-            while i < dx1 {
-                i += 1;
-                e1 += dy1;
-                while e1 >= dx1 {
-                    e1 -= dx1;
-                    if changed1 {
-                        t1xp = signx1;
-                    } else {
-                        next1 = true;
-                        break;
-                    }
-                }
+//             // Process first line until y value is about to change
+//             while i < dx1 {
+//                 i += 1;
+//                 e1 += dy1;
+//                 while e1 >= dx1 {
+//                     e1 -= dx1;
+//                     if changed1 {
+//                         t1xp = signx1;
+//                     } else {
+//                         next1 = true;
+//                         break;
+//                     }
+//                 }
 
-                if next1 {
-                    break;
-                }
+//                 if next1 {
+//                     break;
+//                 }
 
-                if changed1 {
-                    break;
-                } else {
-                    t1x += signx1;
-                }
+//                 if changed1 {
+//                     break;
+//                 } else {
+//                     t1x += signx1;
+//                 }
 
-            }
+//             }
 
-            // Next1
-            // Process second line until y value is about to change
-            loop {
-                e2 += dy2;
-                while e2 >= dx2 {
-                    e2 -= dx2;
-                    if changed2 {
-                        t2xp = signx2;
-                    } else {
-                        next2 = true;
-                        break;
-                    }
-                }
+//             // Next1
+//             // Process second line until y value is about to change
+//             loop {
+//                 e2 += dy2;
+//                 while e2 >= dx2 {
+//                     e2 -= dx2;
+//                     if changed2 {
+//                         t2xp = signx2;
+//                     } else {
+//                         next2 = true;
+//                         break;
+//                     }
+//                 }
 
-                if next2 {
-                    break;
-                }
-                if changed2 {
-                    break;
-                }
-                else {
-                    t2x += signx2;
-                }
+//                 if next2 {
+//                     break;
+//                 }
+//                 if changed2 {
+//                     break;
+//                 }
+//                 else {
+//                     t2x += signx2;
+//                 }
 
-            }
+//             }
 
-            // Next2
-            if minx > t1x {
-                minx = t1x;
-            }
-            if minx > t2x {
-                minx = t2x;
-            }
-            if maxx < t1x {
-                maxx = t1x;
-            }
-            if maxx < t2x {
-                maxx = t2x;
-            }
+//             // Next2
+//             if minx > t1x {
+//                 minx = t1x;
+//             }
+//             if minx > t2x {
+//                 minx = t2x;
+//             }
+//             if maxx < t1x {
+//                 maxx = t1x;
+//             }
+//             if maxx < t2x {
+//                 maxx = t2x;
+//             }
 
-            // Draw line from min to max points found on the y
-            fill_line(frame, minx, maxx, y, color, width, height);
+//             // Draw line from min to max points found on the y
+//             fill_line(frame, minx, maxx, y, color, width, height);
 
-            // Now increase y
-            if !changed1 {
-                t1x += signx1;
-            }
-            t1x += t1xp;
-            if !changed2 {
-                t2x += signx2;
-            }
-            t2x += t2xp;
-            y += 1;
-            if y == y2 {
-                break;
-            }
+//             // Now increase y
+//             if !changed1 {
+//                 t1x += signx1;
+//             }
+//             t1x += t1xp;
+//             if !changed2 {
+//                 t2x += signx2;
+//             }
+//             t2x += t2xp;
+//             y += 1;
+//             if y == y2 {
+//                 break;
+//             }
 
-        }
-    }
+//         }
+//     }
 
-    // Next
-    // Second half
-    dx1 = x3 - x2;
-    if dx1 < 0 {
-        dx1 = -dx1;
-        signx1 = -1;
-    } else {
-        signx1 = 1;
-    }
-    dy1 = y3 - y2;
-    t1x = x2;
+//     // Next
+//     // Second half
+//     dx1 = x3 - x2;
+//     if dx1 < 0 {
+//         dx1 = -dx1;
+//         signx1 = -1;
+//     } else {
+//         signx1 = 1;
+//     }
+//     dy1 = y3 - y2;
+//     t1x = x2;
 
-    // Swap values
-    if dy1 > dx1 {
-        (dy1, dx1) = (dx1, dy1);
-        changed1 = true;
+//     // Swap values
+//     if dy1 > dx1 {
+//         (dy1, dx1) = (dx1, dy1);
+//         changed1 = true;
 
-    } else {
-        changed1 = false;
-    }
+//     } else {
+//         changed1 = false;
+//     }
 
-    let mut e1 = dx1 >> 1;
+//     let mut e1 = dx1 >> 1;
 
-    for mut  i in 0..dx1+1 {
+//     for mut  i in 0..dx1+1 {
 
-        let mut next3 = false;
-        let mut next4 = false;
-        let mut t1xp = 0;
-        let mut t2xp = 0;
-        let mut minx;
-        let mut maxx;
+//         let mut next3 = false;
+//         let mut next4 = false;
+//         let mut t1xp = 0;
+//         let mut t2xp = 0;
+//         let mut minx;
+//         let mut maxx;
 
-        if t1x < t2x {
-            minx = t1x;
-            maxx = t2x;
-        } else {
-            minx = t2x;
-            maxx = t1x;
-        }
+//         if t1x < t2x {
+//             minx = t1x;
+//             maxx = t2x;
+//         } else {
+//             minx = t2x;
+//             maxx = t1x;
+//         }
 
-        // Process first line until y value is about to change
-        while i < dx1 {
-            e1 += dy1;
-            while e1 >= dx1 {
-                e1 -= dx1;
-                if changed1 {
-                    t1xp = signx1; // t1x += signx1;
-                    break;
-                } else {
-                    next3 = true;
-                    break;
-                }
-            }
+//         // Process first line until y value is about to change
+//         while i < dx1 {
+//             e1 += dy1;
+//             while e1 >= dx1 {
+//                 e1 -= dx1;
+//                 if changed1 {
+//                     t1xp = signx1; // t1x += signx1;
+//                     break;
+//                 } else {
+//                     next3 = true;
+//                     break;
+//                 }
+//             }
 
-            if next3 {
-                break;
-            }
+//             if next3 {
+//                 break;
+//             }
 
-            if changed1 {
-                break;
-            }
-            else {
-                t1x += signx1;
-            }
-            if i < dx1 {
-                i += 1;
-            }
+//             if changed1 {
+//                 break;
+//             }
+//             else {
+//                 t1x += signx1;
+//             }
+//             if i < dx1 {
+//                 i += 1;
+//             }
 
-        }
+//         }
 
-        // Next3
-        // Process second line until y value is about to change
-        while t2x != x3 {
-            e2 += dy2;
-            while e2 >= dx2 {
-                e2 -= dx2;
-                if changed2 {
-                    t2xp = signx2;
-                } else {
-                    next4 = true;
-                    break;
-                }
-            }
+//         // Next3
+//         // Process second line until y value is about to change
+//         while t2x != x3 {
+//             e2 += dy2;
+//             while e2 >= dx2 {
+//                 e2 -= dx2;
+//                 if changed2 {
+//                     t2xp = signx2;
+//                 } else {
+//                     next4 = true;
+//                     break;
+//                 }
+//             }
 
-            if next4 {
-                break;
-            }
+//             if next4 {
+//                 break;
+//             }
 
-            if changed2 {
-                break;
-            } else {
-                t2x += signx2;
-            }
-        }
+//             if changed2 {
+//                 break;
+//             } else {
+//                 t2x += signx2;
+//             }
+//         }
 
-        // Next4
-        // if minx > t1x:    # Visual Glitch with t1x
-        //     minx = t1x
-        if minx > t2x {
-            minx = t2x;
-        }
-        // if maxx < t1x:    # Visual Glitch with t1x
-        //     maxx = t1x
-        if maxx < t2x {
-            maxx = t2x;
-        }
+//         // Next4
+//         // if minx > t1x:    # Visual Glitch with t1x
+//         //     minx = t1x
+//         if minx > t2x {
+//             minx = t2x;
+//         }
+//         // if maxx < t1x:    # Visual Glitch with t1x
+//         //     maxx = t1x
+//         if maxx < t2x {
+//             maxx = t2x;
+//         }
 
-        fill_line(frame, minx, maxx, y, color, width, height);
-        if !changed1 {
-            t1x += signx1;
-        }
-        t1x += t1xp;
-        if !changed2 {
-            t2x += signx2;
-        }
-        t2x += t2xp;
-        y += 1;
-        if y > y3 {
-            return
-        }
-    }
-}
+//         fill_line(frame, minx, maxx, y, color, width, height);
+//         if !changed1 {
+//             t1x += signx1;
+//         }
+//         t1x += t1xp;
+//         if !changed2 {
+//             t2x += signx2;
+//         }
+//         t2x += t2xp;
+//         y += 1;
+//         if y > y3 {
+//             return
+//         }
+//     }
+// }
 
 fn get_color() {
 
 }
 
+fn edge(a: Vec3, b: Vec3, p: Vec3) -> f32 {
+    (p.x - a.x) * (b.y - a.y)
+        - (p.y - a.y) * (b.x - a.x)
+}
+
+fn fill_triangle(
+    frame: &mut [u8],
+    depth_buffer: &mut [f32],
+    tri: &Triangle,
+    width: usize,
+    height: usize,
+) {
+    let p0 = tri.p[0];
+    let p1 = tri.p[1];
+    let p2 = tri.p[2];
+
+    let min_x = p0.x
+        .min(p1.x)
+        .min(p2.x)
+        .floor()
+        .max(0.0) as usize;
+
+    let max_x = p0.x
+        .max(p1.x)
+        .max(p2.x)
+        .ceil()
+        .min((width - 1) as f32) as usize;
+
+    let min_y = p0.y
+        .min(p1.y)
+        .min(p2.y)
+        .floor()
+        .max(0.0) as usize;
+
+    let max_y = p0.y
+        .max(p1.y)
+        .max(p2.y)
+        .ceil()
+        .min((height - 1) as f32) as usize;
+
+    let area = edge(p0, p1, p2);
+
+    if area.abs() < 0.000001 {
+        return;
+    }
+
+    for y in min_y..=max_y {
+        for x in min_x..=max_x {
+            let pixel = Vec3::new(
+                x as f32 + 0.5,
+                y as f32 + 0.5,
+                0.0,
+            );
+
+            let w0 = edge(p1, p2, pixel) / area;
+            let w1 = edge(p2, p0, pixel) / area;
+            let w2 = edge(p0, p1, pixel) / area;
+
+            if w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0 {
+                let depth =
+                    w0 * p0.z +
+                    w1 * p1.z +
+                    w2 * p2.z;
+
+                let index = y * width + x;
+
+                if depth < depth_buffer[index] {
+                    depth_buffer[index] = depth;
+
+                    set_pixel(
+                        frame,
+                        x,
+                        y,
+                        width,
+                        tri.c.0,
+                        tri.c.1,
+                        tri.c.2,
+                    );
+                }
+            }
+        }
+    }
+}
+
 const PELTA: f32 = 0.05;
+
+
 
 
 fn main() {
@@ -920,7 +1012,7 @@ fn main() {
 
     let mut tp1: Instant = Instant::now();
 
-    let mesh = load_mesh("retro_fp_pistol.obj");
+    let mesh = load_mesh("test_map.obj");
 
 
 
@@ -933,8 +1025,8 @@ fn main() {
 
 
     let mut v_camera = Vec3 {
-        x: 0.0,
-        y: 0.0,
+        x: -34.0,
+        y: 1.7,
         z: 0.0,
         w: 1.0,
     };
@@ -946,13 +1038,12 @@ fn main() {
         w: 0.0,
     };
 
-    let v_forward: Vec3 = v_look_dir * (8.0 * PELTA);
 
     use std::time::{Instant, Duration};
 
     let mut last_time = Instant::now();
     let mut frame_count = 0;
-    let mut yaw = 0.0;
+
 
     
     // Create window and buffer
@@ -962,8 +1053,31 @@ fn main() {
         .with_inner_size(winit::dpi::LogicalSize::new(width, height))
         .build(&event_loop)
         .unwrap();
+
+    window
+    .set_cursor_grab(CursorGrabMode::Locked)
+    .or_else(|_| window.set_cursor_grab(CursorGrabMode::Confined))
+    .ok();
+
+    window.set_cursor_visible(false);
+
     let surface_texture = SurfaceTexture::new(width, height, &window);
     let mut pixels = Pixels::new(width, height, surface_texture).unwrap();
+
+    let mut depth_buffer = vec![f32::INFINITY; (width * height) as usize];
+
+    let mut move_forward = false;
+    let mut move_backward = false;
+    let mut move_left = false;
+    let mut move_right = false;
+
+    let mut yaw: f32 = 0.0;
+    let mut pitch: f32 = 0.0;
+
+    let mouse_sensitivity: f32 = 0.0025;
+    let movement_speed: f32 = 5.0;
+
+    let mut last_frame = Instant::now();
 
     event_loop.run(move |event, _, control_flow| {
         *control_flow = ControlFlow::Poll;
@@ -983,67 +1097,52 @@ fn main() {
         // Handle input and player movement
         match event {
 
+            Event::DeviceEvent {
+                event: DeviceEvent::MouseMotion { delta },
+                ..
+            } => {
+                yaw -= delta.0 as f32 * mouse_sensitivity;
+                pitch -= delta.1 as f32 * mouse_sensitivity;
 
+                pitch = pitch.clamp(-1.5, 1.5);
+            }
             Event::WindowEvent { event, .. } => match event {
+
+
 
 
 
                 WindowEvent::CloseRequested => *control_flow = ControlFlow::Exit,
 
                 WindowEvent::KeyboardInput { input, .. } => {
-                    if let Some(keycode) = input.virtual_keycode {
-                        match (keycode, input.state) {
-                            (VirtualKeyCode::Escape, ElementState::Pressed) => {
-                                *control_flow = ControlFlow::Exit;
-                            }
-                            (VirtualKeyCode::A, ElementState::Pressed) => {
-                                yaw += 2.0 * PELTA;
-                            }
-                            (VirtualKeyCode::D, ElementState::Pressed) => {
-                                yaw -= 2.0 * PELTA;
-                            }
+                if let Some(keycode) = input.virtual_keycode {
+                    let pressed = input.state == ElementState::Pressed;
 
-                            (VirtualKeyCode::W, ElementState::Pressed) => {
-                                v_camera = v_camera + v_forward;
-
-                            }
-
-                            (VirtualKeyCode::S, ElementState::Pressed) => {
-                                v_camera = v_camera - v_forward
-                            }
-
-                            (VirtualKeyCode::Q, ElementState::Pressed) => {
-                                player_x -= (player_a + 1.5).sin() * SPEED * DELTA;
-                                player_y -= (player_a + 1.5).cos() * SPEED * DELTA;
-
-                            }
-
-                            (VirtualKeyCode::E, ElementState::Pressed) => {
-                                player_x -= (player_a - 1.5).sin() * SPEED * DELTA;
-                                player_y -= (player_a - 1.5).cos() * SPEED * DELTA;
-  
-                            }
-
-                            (VirtualKeyCode::Up, ElementState::Pressed) => {
-                                v_camera.y -= 8.0 * PELTA;
-                            }
-
-                            (VirtualKeyCode::Down, ElementState::Pressed) => {
-                                v_camera.y += 8.0 * PELTA; 
-                            }
-
-                            (VirtualKeyCode::Left, ElementState::Pressed) => {
-                                v_camera.x -= 8.0 * PELTA;
-                            }
-
-                            (VirtualKeyCode::Right, ElementState::Pressed) => {
-                                v_camera.x += 8.0 * PELTA;
-                            }
-
-                            _ => {}
+                    match keycode {
+                        VirtualKeyCode::Escape if pressed => {
+                            *control_flow = ControlFlow::Exit;
                         }
+
+                        VirtualKeyCode::W => {
+                            move_forward = pressed;
+                        }
+
+                        VirtualKeyCode::S => {
+                            move_backward = pressed;
+                        }
+
+                        VirtualKeyCode::A => {
+                            move_left = pressed;
+                        }
+
+                        VirtualKeyCode::D => {
+                            move_right = pressed;
+                        }
+
+                        _ => {}
                     }
                 }
+            }
 
                 _ => {} // <-- catch all other WindowEvent variants
             },
@@ -1055,6 +1154,7 @@ fn main() {
 
                 // Clear screen
                 reset_screen(frame);
+                depth_buffer.fill(f32::INFINITY);
 
                 // theta += 0.01;
 
@@ -1075,15 +1175,20 @@ fn main() {
                     w: 0.0,
                 };
 
-                let mut v_target = Vec3 {
+                let v_target = v_camera + v_look_dir;
+
+                let v_up = Vec3 {
                     x: 0.0,
-                    y: 0.0,
-                    z: 1.0,
+                    y: 1.0,
+                    z: 0.0,
                     w: 0.0,
                 };
-                let mat_camera_rot: Mat4x4 = rotation_y(yaw);
-                v_look_dir = v_target.matrix_multiply_vector(&mat_camera_rot);
-                v_target = v_camera + v_look_dir;
+
+                let mat_camera =
+                    matrix_point_at(v_camera, v_target, v_up);
+
+                let mat_view =
+                    matrix_quick_inverse(mat_camera);
 
                 let mat_camera: Mat4x4 = matrix_point_at(v_camera, v_target, v_up);
 
@@ -1129,23 +1234,40 @@ fn main() {
                         };
                         light_direction = light_direction.normalize();
 
-                        let dp = light_direction.dot(normal).max(0.1);
+                        let direction_to_light = Vec3 {
+                            x: 0.4,
+                            y: 1.0,
+                            z: -0.6,
+                            w: 0.0,
+                        }.normalize();
 
+                        let diffuse = normal
+                            .dot(direction_to_light)
+                            .max(0.0);
 
-                        // Get a shade of grey
-                        let intensity = ((dp + 1.0) * 0.5).clamp(0.0, 1.0);
+                        let ambient = 0.15;
+
+                        let intensity =
+                            ambient + diffuse * (1.0 - ambient);
+
                         let grey = (intensity * 255.0) as u8;
+
                         let color = (grey, grey, grey);
+
                         
                         // Convert world space --> view space
-                        let tri_viewed: Triangle = Triangle {
+                        let viewed_p0 = tri_transformed.p[0].matrix_multiply_vector(&mat_view);
+                        let viewed_p1 = tri_transformed.p[1].matrix_multiply_vector(&mat_view);
+                        let viewed_p2 = tri_transformed.p[2].matrix_multiply_vector(&mat_view);
+
+                        let tri_viewed = Triangle {
                             p: [
-                                tri_transformed.p[0].matrix_multiply_vector(&mat_view),
-                                tri_transformed.p[1].matrix_multiply_vector(&mat_view),
-                                tri_transformed.p[2].matrix_multiply_vector(&mat_view),
+                                viewed_p0,
+                                viewed_p1,
+                                viewed_p2,
                             ],
                             c: color,
-                            avg_z: 0.0,
+                            avg_z: (viewed_p0.z + viewed_p1.z + viewed_p2.z) / 3.0,
                         };
 
                         // Clip viewed triangle against near plane, this could form two additional triangles
@@ -1182,6 +1304,12 @@ fn main() {
                             tri_projected.p[0] = tri_projected.p[0] / tri_projected.p[0].w;
                             tri_projected.p[1] = tri_projected.p[1] / tri_projected.p[1].w;
                             tri_projected.p[2] = tri_projected.p[2] / tri_projected.p[2].w;
+
+                            // NDC  has +Y upward.
+                            // The framebuffer has +Y downward
+                            tri_projected.p[0].y *= -1.0;
+                            tri_projected.p[1].y *= -1.0;
+                            tri_projected.p[2].y *= -1.0;
                         
 
 
@@ -1197,6 +1325,8 @@ fn main() {
                             tri_projected.p[0] = tri_projected.p[0] + offset_view;
                             tri_projected.p[1] = tri_projected.p[1] + offset_view;
                             tri_projected.p[2] = tri_projected.p[2] + offset_view;
+
+
 
                             tri_projected.p[0].x *= 0.5 * width as f32;
                             tri_projected.p[1].x *= 0.5 * width as f32;
@@ -1215,13 +1345,9 @@ fn main() {
 
                 }
 
-                // compute depth
-                vec_triangles_to_raster.iter_mut().for_each(|t| {
-                    t.avg_z = (t.p[0].z + t.p[1].z + t.p[2].z) / 3.0;
-                });
 
-                // Sort triangles from back to front (painters algorithm)
-                vec_triangles_to_raster.sort_by(|a, b| b.avg_z.total_cmp(&a.avg_z));
+
+
 
 
                 // Loop through all transformed, viewed, projected, and sorted triangles
@@ -1284,23 +1410,21 @@ fn main() {
                     for t in &list_triangles {
                         fill_triangle(
                             frame,
-                            t.p[0].x as i32, t.p[0].y as i32,
-                            t.p[1].x as i32, t.p[1].y as i32,
-                            t.p[2].x as i32, t.p[2].y as i32,
-                            t.c,
-                            width as i32,
-                            height as i32,
+                            &mut depth_buffer,
+                            t,
+                            width as usize,
+                            height as usize,
                         );
 
-                        draw_triangle(
-                            frame,
-                            t.p[0].x as i32, t.p[0].y as i32,
-                            t.p[1].x as i32, t.p[1].y as i32,
-                            t.p[2].x as i32, t.p[2].y as i32,
-                            WHITE,
-                            width as i32,
-                            height as i32,
-                         );
+                        // draw_triangle(
+                        //     frame,
+                        //     t.p[0].x as i32, t.p[0].y as i32,
+                        //     t.p[1].x as i32, t.p[1].y as i32,
+                        //     t.p[2].x as i32, t.p[2].y as i32,
+                        //     WHITE,
+                        //     width as i32,
+                        //     height as i32,
+                        //  );
                     }
                 }
 
@@ -1308,7 +1432,62 @@ fn main() {
             }
 
             Event::MainEventsCleared => {
+
+
+                let cos_pitch = pitch.cos();
+
+                v_look_dir = Vec3 {
+                    x: -yaw.sin() * cos_pitch,
+                    y: pitch.sin(),
+                    z: yaw.cos() * cos_pitch,
+                    w: 0.0,
+                };
+
+                let forward = Vec3 {
+                    x: v_look_dir.x,
+                    y: 0.0,
+                    z: v_look_dir.z,
+                    w: 0.0,
+                }.normalize();
+
+                let up = Vec3 {
+                    x: 0.0,
+                    y: 1.0,
+                    z: 0.0,
+                    w: 0.0,
+                };
+
+                let right = up.cross(forward).normalize();
+
+                let now = Instant::now();
+
+                let dt = now
+                    .duration_since(last_frame)
+                    .as_secs_f32()
+                    .min(0.05);
+
+                last_frame = now;
+
+                let distance = movement_speed * dt;
+
+                if move_forward {
+                    v_camera = v_camera + forward * distance;
+                }
+
+                if move_backward {
+                    v_camera = v_camera - forward * distance;
+                }
+
+                if move_right {
+                    v_camera = v_camera + right * distance;
+                }
+
+                if move_left {
+                    v_camera = v_camera - right * distance;
+                }
+
                 window.request_redraw();
+                
             }
 
             _ => {}
