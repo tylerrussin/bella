@@ -1,3 +1,23 @@
+mod math;
+mod geometry;
+
+use math::vec3::Vec3;
+
+use math::mat4::{
+    Mat4x4,
+    multiply_matrix,
+    matrix_point_at,
+    identity,
+    rotation_x,
+    rotation_y,
+    rotation_z,
+    translation,
+    make_projection,
+    matrix_quick_inverse,
+};
+
+use geometry::{Triangle, Mesh};
+
 use winit::{
     event::{
         Event,
@@ -24,146 +44,7 @@ use std::ops::{
 };
 
 
-#[derive(Copy, Clone)]
-struct Vec3 {
-    x: f32,
-    y: f32,
-    z: f32,
-    w: f32,
-}
 
-impl Default for Vec3 {
-    fn default() -> Self {
-        Self {
-            x: 0.0,
-            y: 0.0, 
-            z: 0.0,
-            w: 1.0,
-        }
-    }
-}
-
-impl Add for Vec3 {
-    type Output = Vec3;
-    fn add(self, rhs: Vec3) -> Vec3 {
-        Vec3 {
-            x: self.x + rhs.x,
-            y: self.y + rhs.y,
-            z: self.z + rhs.z,
-            w: self.w,
-        }
-    }
-}
-
-impl Sub for Vec3 {
-    type Output = Vec3;
-    fn sub(self, rhs: Vec3) -> Vec3 {
-        Vec3 {
-            x: self.x - rhs.x,
-            y: self.y - rhs.y,
-            z: self.z - rhs.z,
-            w: self.w,
-        }
-    }
-}
-
-impl Mul for Vec3 {
-    type Output = Vec3;
-    fn mul(self, rhs: Vec3) -> Vec3 {
-        Vec3 {
-            x: self.x * rhs.x,
-            y: self.y * rhs.y,
-            z: self.z * rhs.z,
-            w: self.w,
-        }
-    }
-}
-
-impl Mul<f32> for Vec3 {
-    type Output = Vec3;
-    fn mul(self, rhs: f32) -> Vec3 {
-        Vec3 {
-            x: self.x * rhs,
-            y: self.y * rhs,
-            z: self.z * rhs,
-            w: self.w,
-        }
-    }
-}
-
-impl Div for Vec3 {
-    type Output = Vec3;
-    fn div(self, rhs: Vec3) -> Vec3 {
-        Vec3 {
-            x: self.x / rhs.x,
-            y: self.y / rhs.y,
-            z: self.z / rhs.z,
-            w: self.w,
-        }
-    }
-}
-
-impl Div<f32> for Vec3 {
-    type Output = Vec3;
-    fn div(self, rhs: f32) -> Vec3 {
-        Vec3 {
-            x: self.x / rhs,
-            y: self.y / rhs,
-            z: self.z / rhs,
-            w: self.w,
-        }
-    }
-}
-
-impl Vec3 {
-    fn new(x: f32, y: f32, z:f32) -> Self {
-        Vec3 {x, y, z, w: 1.0}
-    }
-    fn dot(self, other: Vec3) -> f32 {
-        self.x * other.x + self.y * other.y + self.z * other.z
-    }
-    fn length(self) -> f32 {
-        (self.dot(self)).sqrt()
-    }
-    fn normalize(self) -> Vec3 {
-        let l = self.length();
-        if l == 0.0 {
-            return self
-        }
-        Vec3 {
-            x: self.x / l,
-            y: self.y / l,
-            z: self.z / l,
-            w: self.w,
-        }
-    }
-    fn cross(self, other: Vec3) -> Vec3 {
-        Vec3 {
-            x: self.y * other.z - self.z * other.y,
-            y: self.z * other.x - self.x * other.z,
-            z: self.x * other.y - self.y * other.x,
-            w: self.w,
-        }
-    }
-    fn matrix_multiply_vector(self, m: &Mat4x4) -> Vec3 {
-        Vec3 {
-            x: self.x * m.get(0, 0) + self.y * m.get(1, 0) + self.z * m.get(2, 0) + self.w * m.get(3, 0),
-            y: self.x * m.get(0, 1) + self.y * m.get(1, 1) + self.z * m.get(2, 1) + self.w * m.get(3, 1),
-            z: self.x * m.get(0, 2) + self.y * m.get(1, 2) + self.z * m.get(2, 2) + self.w * m.get(3, 2),
-            w: self.x * m.get(0, 3) + self.y * m.get(1, 3) + self.z * m.get(2, 3) + self.w * m.get(3, 3),
-        }
-    }
-    fn intersect_plane(plane_p: Vec3, plane_n: Vec3, line_start: Vec3, line_end: Vec3) -> Vec3 {
-        let plane_n: Vec3 = plane_n.normalize();
-        let plane_d: f32 = -plane_n.dot(plane_p);
-        let ad: f32 = line_start.dot(plane_n);
-        let bd: f32 = line_end.dot(plane_n);
-        let t: f32 = (-plane_d - ad) / (bd - ad);
-        let line_start_to_end = line_end - line_start;
-        let line_to_intersect = line_start_to_end * t;
-        line_start + line_to_intersect
-    }
-}
 
 fn triangle_clip_against_plane(plane_p: Vec3, mut plane_n: Vec3, in_tri: &Triangle, out_tri1: &mut Triangle, out_tri2: &mut Triangle) -> usize {
     // Confirm plane is normalised
@@ -254,191 +135,6 @@ fn triangle_clip_against_plane(plane_p: Vec3, mut plane_n: Vec3, in_tri: &Triang
     }
     return 0;
 }
-
-struct Mat4x4 {
-    m: [f32; 16],
-}
-
-
-
-impl Mat4x4 {
-    fn new() -> Self {
-        Self { m: [0.0; 16] }
-    }
-    fn get(&self, row: usize, col: usize) -> f32 {
-        self.m[row * 4 + col]
-    }
-    fn set(&mut self, row: usize, col: usize, value: f32) {
-        self.m[row * 4 + col] = value;
-    }
-}
-
-fn multiply_matrix(a: &Mat4x4, b: &Mat4x4) -> Mat4x4 {
-    let mut result = Mat4x4::new();
-
-    for row in 0..4 {
-        for col in 0..4 {
-            let mut sum = 0.0;
-            for i in 0..4 {
-                sum += a.get(row, i) * b.get(i, col);
-            }
-            result.set(row, col, sum);
-        }
-    }
-
-    result
-}
-
-fn matrix_point_at(pos: Vec3, target: Vec3, up: Vec3) -> Mat4x4 {
-   // Calculate new forward direction
-   let mut new_forward = target - pos;
-   new_forward = new_forward.normalize();
-
-   // Calculate new up direction
-   let a = new_forward * up.dot(new_forward);
-   let mut new_up = up - a;
-   new_up = new_up.normalize();
-
-   // New right direction is just the cross product
-   let new_right = new_up.cross(new_forward);
-
-   // Construct dimensioning and translation matrix
-   let mut matrix = Mat4x4::new();
-   matrix.set(0, 0, new_right.x);
-   matrix.set(0, 1, new_right.y);
-   matrix.set(0, 2, new_right.z);
-   matrix.set(0, 3, 0.0);
-
-   matrix.set(1, 0, new_up.x);
-   matrix.set(1, 1, new_up.y);
-   matrix.set(1, 2, new_up.z);
-   matrix.set(1, 3, 0.0);
-
-   matrix.set(2, 0, new_forward.x);
-   matrix.set(2, 1, new_forward.y);
-   matrix.set(2, 2, new_forward.z);
-   matrix.set(2, 3, 0.0);
-
-   matrix.set(3, 0, pos.x);
-   matrix.set(3, 1, pos.y);
-   matrix.set(3, 2, pos.z);
-   matrix.set(3, 3, 1.0);
-
-   matrix
-}
-
-fn identity() -> Mat4x4 {
-    let mut mat = Mat4x4::new();
-    mat.set(0, 0, 1.0);
-    mat.set(1, 1, 1.0);
-    mat.set(2, 2, 1.0);
-    mat.set(3, 3, 1.0);
-    mat
-}
-fn rotation_x(angle_radian: f32) -> Mat4x4 {
-    let mut mat = Mat4x4::new();
-    mat.set(0, 0, 1.0);
-    mat.set(1, 1, angle_radian.cos());
-    mat.set(1, 2, angle_radian.sin());
-    mat.set(2, 1, -angle_radian.sin());
-    mat.set(2, 2, angle_radian.cos());
-    mat.set(3, 3, 1.0);
-    mat
-}
-fn rotation_y(angle_radian: f32) -> Mat4x4 {
-    let mut mat = Mat4x4::new();
-    mat.set(0, 0, angle_radian.cos());
-    mat.set(0, 2, angle_radian.sin());
-    mat.set(2, 0, -angle_radian.sin());
-    mat.set(1, 1, 1.0);
-    mat.set(2, 2, angle_radian.cos());
-    mat.set(3, 3, 1.0);
-    mat
-}
-fn rotation_z(angle_radian: f32) -> Mat4x4 {
-    let mut mat = Mat4x4::new();
-    mat.set(0, 0, angle_radian.cos());
-    mat.set(0, 1, angle_radian.sin());
-    mat.set(1, 0, -angle_radian.sin());
-    mat.set(1, 1, angle_radian.cos());
-    mat.set(2, 2, 1.0);
-    mat.set(3, 3, 1.0);
-    mat
-}
-fn translation(x: f32, y: f32, z: f32) -> Mat4x4 {
-    let mut mat = Mat4x4::new();
-    mat.set(0, 0, 1.0);
-    mat.set(1, 1, 1.0);
-    mat.set(2, 2, 1.0);
-    mat.set(3, 0, x);
-    mat.set(3, 1, y);
-    mat.set(3, 2, z);
-    mat.set(3, 3, 1.0);
-    mat
-}
-fn make_projection(fov_deg: f32, aspect_ratio: f32, near: f32, far: f32) -> Mat4x4 {
-    let fov_rad = 1.0 / (fov_deg * 0.5 / 180.0 * 3.14159).tan();
-    let mut mat = Mat4x4::new();
-    mat.set(0, 0, aspect_ratio * fov_rad);
-    mat.set(1, 1, fov_rad);
-    mat.set(2, 2, far / (far - near));
-    mat.set(3, 2, (-far * near) / (far - near));
-    mat.set(2, 3, 1.0);
-    mat.set(3, 3, 0.0);
-    mat
-}
-fn matrix_quick_inverse(m: Mat4x4) -> Mat4x4 {
-    let mut mat = Mat4x4::new();
-    mat.set(0, 0, m.get(0, 0));
-    mat.set(0, 1, m.get(1, 0));
-    mat.set(0, 2, m.get(2, 0));
-    mat.set(0, 3, 0.0);
-    mat.set(1, 0, m.get(0, 1));
-    mat.set(1, 1, m.get(1, 1));
-    mat.set(1, 2, m.get(2, 1));
-    mat.set(1, 3, 0.0);
-    mat.set(2, 0, m.get(0, 2));
-    mat.set(2, 1, m.get(1, 2));
-    mat.set(2, 2, m.get(2, 2));
-    mat.set(2, 3, 0.0);
-    mat.set(3, 0, -(m.get(3, 0) * mat.get(0, 0) + m.get(3, 1) * mat.get(1, 0) + m.get(3, 2) * mat.get(2, 0)));
-    mat.set(3, 1, -(m.get(3, 0) * mat.get(0, 1) + m.get(3, 1) * mat.get(1, 1) + m.get(3, 2) * mat.get(2, 1)));
-    mat.set(3, 2, -(m.get(3, 0) * mat.get(0, 2) + m.get(3, 1) * mat.get(1, 2) + m.get(3, 2) * mat.get(2, 2)));
-    mat.set(3, 3, 1.0);
-    mat
-}
-
-
-
-
-
-
-#[derive(Clone)]
-struct Triangle {
-    p: [Vec3; 3],
-    c: (u8, u8, u8),
-    avg_z: f32,
-}
-
-impl Default for Triangle {
-    fn default() -> Self {
-        Triangle {
-            p: [
-                Vec3 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 },
-                Vec3 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 },
-                Vec3 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 },
-            ],
-            c: WHITE,
-            avg_z: 0.0,
-        }
-    }
-}
-
-
-struct Mesh {
-    tris: Vec<Triangle>,
-}
-
 
 
 const NEAR: f32 = 0.1;
