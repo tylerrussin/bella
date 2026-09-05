@@ -1,5 +1,6 @@
 mod math;
 mod geometry;
+mod loader;
 
 use math::vec3::Vec3;
 
@@ -17,6 +18,8 @@ use math::mat4::{
 };
 
 use geometry::{Triangle, Mesh};
+
+use loader::load_obj;
 
 use winit::{
     event::{
@@ -187,47 +190,7 @@ fn reset_screen(frame: &mut [u8]) {
 
 
 
-// Load model test
-fn load_mesh(file_name: &str) -> Mesh {
-    let file = std::fs::File::open(file_name).expect("Failed to open file");
-    let reader = std::io::BufReader::new(file);
 
-    let mut vectors_list: Vec<Vec3> = Vec::new();
-    let mut triangles_list: Vec<Triangle> = Vec::new();
-
-    for line in reader.lines() {
-        let line = line.expect("Failed to read line");
-        let parts: Vec<&str> = line.split_whitespace().collect();
-        if parts.is_empty() { continue; }
-
-        match parts[0] {
-            "v" => {
-                let x: f32 = parts[1].parse().unwrap();
-                let y: f32 = parts[2].parse().unwrap();
-                let z: f32 = parts[3].parse().unwrap();
-                vectors_list.push(Vec3 { x, y, z, w: 1.0 });
-            }
-            "f" => {
-                let i1: usize = parts[1].split('/').next().unwrap().parse::<usize>().unwrap() - 1;
-                let i2: usize = parts[2].split('/').next().unwrap().parse::<usize>().unwrap() - 1;
-                let i3: usize = parts[3].split('/').next().unwrap().parse::<usize>().unwrap() - 1;
-
-                triangles_list.push(Triangle {
-                    p: [
-                        vectors_list[i1],
-                        vectors_list[i2],
-                        vectors_list[i3],
-                    ],
-                    c: WHITE,
-                    avg_z: 0.0,
-                });
-            }
-            _ => {}
-        }
-    }
-
-    Mesh { tris: triangles_list }
-}
 
 fn draw(frame: &mut [u8], x: usize, y: usize, color: (u8, u8, u8), width: usize, height: usize) {
     if x < width && x >= 0 && y < height && y >= 0 {
@@ -708,8 +671,7 @@ fn main() {
 
     let mut tp1: Instant = Instant::now();
 
-    let mesh = load_mesh("test_map.obj");
-
+    let mesh = load_obj("test_map.obj");
 
 
     // Projection Matrix
