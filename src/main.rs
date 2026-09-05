@@ -1,4 +1,5 @@
 mod math;
+mod geometry;
 
 use math::vec3::Vec3;
 
@@ -15,6 +16,7 @@ use math::mat4::{
     matrix_quick_inverse,
 };
 
+use geometry::{Triangle, Mesh};
 
 use winit::{
     event::{
@@ -133,40 +135,6 @@ fn triangle_clip_against_plane(plane_p: Vec3, mut plane_n: Vec3, in_tri: &Triang
     }
     return 0;
 }
-
-
-
-
-
-
-
-
-#[derive(Clone)]
-struct Triangle {
-    p: [Vec3; 3],
-    c: (u8, u8, u8),
-    avg_z: f32,
-}
-
-impl Default for Triangle {
-    fn default() -> Self {
-        Triangle {
-            p: [
-                Vec3 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 },
-                Vec3 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 },
-                Vec3 { x: 0.0, y: 0.0, z: 0.0, w: 1.0 },
-            ],
-            c: WHITE,
-            avg_z: 0.0,
-        }
-    }
-}
-
-
-struct Mesh {
-    tris: Vec<Triangle>,
-}
-
 
 
 const NEAR: f32 = 0.1;
