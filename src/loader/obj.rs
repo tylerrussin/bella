@@ -21,11 +21,13 @@ pub fn load_obj(file_name: &str) -> Mesh {
                 let y: f32 = parts[2].parse().unwrap();
                 let z: f32 = parts[3].parse().unwrap();
                 vectors_list.push(Vec3 { x, y, z, w: 1.0 });
+
             }
             "f" => {
                 let i1: usize = parts[1].split('/').next().unwrap().parse::<usize>().unwrap() - 1;
                 let i2: usize = parts[2].split('/').next().unwrap().parse::<usize>().unwrap() - 1;
                 let i3: usize = parts[3].split('/').next().unwrap().parse::<usize>().unwrap() - 1;
+                println!("{}", i1);
 
                 triangles_list.push(Triangle {
                     p: [
