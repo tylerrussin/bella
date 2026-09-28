@@ -1,7 +1,8 @@
 use crate::geometry::{Triangle, Mesh};
 use crate::math::vec3::Vec3;
+use crate::math::vec2::Vec2;
 
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead};
 
 pub fn load_obj(file_name: &str) -> Mesh {
     let file = std::fs::File::open(file_name).expect("Failed to open file");
@@ -27,13 +28,18 @@ pub fn load_obj(file_name: &str) -> Mesh {
                 let i1: usize = parts[1].split('/').next().unwrap().parse::<usize>().unwrap() - 1;
                 let i2: usize = parts[2].split('/').next().unwrap().parse::<usize>().unwrap() - 1;
                 let i3: usize = parts[3].split('/').next().unwrap().parse::<usize>().unwrap() - 1;
-                println!("{}", i1);
+                
 
                 triangles_list.push(Triangle {
                     p: [
                         vectors_list[i1],
                         vectors_list[i2],
                         vectors_list[i3],
+                    ],
+                    uv: [
+                        Vec2 { u: 0.0, v: 0.0},
+                        Vec2 { u: 0.0, v: 1.0},
+                        Vec2 { u: 1.0, v: 1.0},
                     ],
                     c: (255, 255, 255),
                     avg_z: 0.0,

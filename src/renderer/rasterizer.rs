@@ -24,6 +24,22 @@ fn edge(a: Vec3, b: Vec3, p: Vec3) -> f32 {
         - (p.y - a.y) * (b.x - a.x)
 }
 
+fn sample_texture(texture: &[&str], u: f32, v: f32) -> (u8, u8, u8) {
+    let height = texture.len();
+    let width = texture[0].len();
+
+    let x = (u.clamp(0.0, 1.0) * (width - 1) as f32) as usize;
+    let y = (v.clamp(0.0, 1.0) * (height - 1) as f32) as usize;
+
+    let c = texture[y].as_bytes()[x] as char;
+
+    match c {
+        'R' => (150, 55, 40),
+        'W' => (200, 190, 170),
+        _ => (255, 0, 255),
+    }
+}
+
 pub fn fill_triangle(
     frame: &mut [u8],
     depth_buffer: &mut [f32],
@@ -88,14 +104,46 @@ pub fn fill_triangle(
                 if depth < depth_buffer[index] {
                     depth_buffer[index] = depth;
 
+                    let u =
+                        w0 * tri.uv[0].u +
+                        w1 * tri.uv[1].u +
+                        w2 * tri.uv[2].u;
+
+                    let v =
+                        w0 * tri.uv[0].v +
+                        w1 * tri.uv[1].v +
+                        w2 * tri.uv[2].v;
+
+                    let texture = [
+                    "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+                    "RRRRRRRWWRRRRRRRWWRRRRRRRWWRRRRR",
+                    "RRRRRRRWWRRRRRRRWWRRRRRRRWWRRRRR",
+                    "RRRRRRRWWRRRRRRRWWRRRRRRRWWRRRRR",
+                    "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+                    "WWWRRRRRRRWWRRRRRRRWWRRRRRRRWWRRR",
+                    "WWWRRRRRRRWWRRRRRRRWWRRRRRRRWWRRR",
+                    "WWWRRRRRRRWWRRRRRRRWWRRRRRRRWWRRR",
+                    "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+                    "RRRRRRRWWRRRRRRRWWRRRRRRRWWRRRRR",
+                    "RRRRRRRWWRRRRRRRWWRRRRRRRWWRRRRR",
+                    "RRRRRRRWWRRRRRRRWWRRRRRRRWWRRRRR",
+                    "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+                    "WWWRRRRRRRWWRRRRRRRWWRRRRRRRWWRRR",
+                    "WWWRRRRRRRWWRRRRRRRWWRRRRRRRWWRRR",
+                    "WWWRRRRRRRWWRRRRRRRWWRRRRRRRWWRRR",
+                    "WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW",
+                    ];
+
+                    let color = sample_texture(&texture, u, v);
+
                     set_pixel(
                         frame,
                         x,
                         y,
                         width,
-                        tri.c.0,
-                        tri.c.1,
-                        tri.c.2,
+                        color.0,
+                        color.1,
+                        color.2,
                     );
                 }
             }

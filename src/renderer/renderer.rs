@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 use crate::geometry::{Mesh, Triangle};
 use crate::math::vec3::Vec3;
 use crate::math::mat4::{
@@ -44,12 +42,6 @@ pub fn render_screen(
     mat_world = multiply_matrix(&mat_world, &mat_rot_z);
     mat_world = multiply_matrix(&mat_world, &mat_trans);
 
-    let v_up = Vec3 {
-        x: 0.0,
-        y: 1.0,
-        z: 0.0,
-        w: 0.0,
-    };
 
     let v_target = camera + look_dir;
 
@@ -60,11 +52,6 @@ pub fn render_screen(
         w: 0.0,
     };
 
-    let mat_camera =
-        matrix_point_at(camera, v_target, v_up);
-
-    let mat_view =
-        matrix_quick_inverse(mat_camera);
 
     let mat_camera: Mat4x4 = matrix_point_at(camera, v_target, v_up);
 
@@ -85,6 +72,11 @@ pub fn render_screen(
                 tri.p[0].matrix_multiply_vector(&mat_world),
                 tri.p[1].matrix_multiply_vector(&mat_world),
                 tri.p[2].matrix_multiply_vector(&mat_world),
+            ],
+            uv: [
+                tri.uv[0],
+                tri.uv[1],
+                tri.uv[2],
             ],
             c: (255, 255, 255),
             avg_z: 0.0,
@@ -118,6 +110,11 @@ pub fn render_screen(
                     viewed_p1,
                     viewed_p2,
                 ],
+                 uv: [
+                    tri_transformed.uv[0],
+                    tri_transformed.uv[1],
+                    tri_transformed.uv[2],
+                ],
                 c: color,
                 avg_z: (viewed_p0.z + viewed_p1.z + viewed_p2.z) / 3.0,
             };
@@ -147,6 +144,11 @@ pub fn render_screen(
                         clipped[n].p[0].matrix_multiply_vector(projection),
                         clipped[n].p[1].matrix_multiply_vector(projection),
                         clipped[n].p[2].matrix_multiply_vector(projection),
+                    ],
+                    uv: [
+                        clipped[n].uv[0],
+                        clipped[n].uv[1],
+                        clipped[n].uv[2],
                     ],
                     c: clipped[n].c,
                     avg_z: clipped[n].avg_z,
@@ -212,7 +214,7 @@ pub fn render_screen(
         let mut n_new_triangles = 1;
 
         for p in 0..4 {
-            let mut n_tris_to_add = 0;
+            let mut n_tris_to_add;
 
             while n_new_triangles > 0 {
                 let test = list_triangles.pop_front().unwrap();

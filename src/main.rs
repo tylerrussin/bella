@@ -12,7 +12,6 @@ use pixels::{Pixels, SurfaceTexture};
 
 use winit::{
     event::{
-        DeviceEvent,
         Event,
     },
     event_loop::{

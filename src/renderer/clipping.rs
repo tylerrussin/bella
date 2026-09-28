@@ -15,10 +15,6 @@ pub fn triangle_clip_against_plane(plane_p: Vec3, mut plane_n: Vec3, in_tri: &Tr
     let mut inside_points: Vec<Vec3> = Vec::new();
     let mut outside_points: Vec<Vec3> = Vec::new();
 
-    // Get signed distance of each point in triangle to plane
-    let d0: f32 = dist(in_tri.p[0]);
-    let d1: f32 = dist(in_tri.p[1]);
-    let d2: f32 = dist(in_tri.p[2]);
 
     // Classify each point
     for &p in &in_tri.p {

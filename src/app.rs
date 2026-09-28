@@ -36,7 +36,7 @@ pub struct App {
 
 impl App {
     pub fn new(width: u32, height: u32) -> Self {
-        let mesh = load_obj("assets/maps/test_map.obj");
+        let mesh = load_obj("assets/maps/room.obj");
 
         let camera = Camera::new(Vec3 {
             x: 5.0,

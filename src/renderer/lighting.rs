@@ -1,4 +1,5 @@
 use crate::math::vec3::Vec3;
+use rand::Rng;
 
 
 pub fn calculate_lighting(normal: Vec3) -> (u8, u8, u8) {

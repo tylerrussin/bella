@@ -90,16 +90,6 @@ pub fn rotation_x(angle_radian: f32) -> Mat4x4 {
     mat.set(3, 3, 1.0);
     mat
 }
-pub fn rotation_y(angle_radian: f32) -> Mat4x4 {
-    let mut mat = Mat4x4::new();
-    mat.set(0, 0, angle_radian.cos());
-    mat.set(0, 2, angle_radian.sin());
-    mat.set(2, 0, -angle_radian.sin());
-    mat.set(1, 1, 1.0);
-    mat.set(2, 2, angle_radian.cos());
-    mat.set(3, 3, 1.0);
-    mat
-}
 pub fn rotation_z(angle_radian: f32) -> Mat4x4 {
     let mut mat = Mat4x4::new();
     mat.set(0, 0, angle_radian.cos());
